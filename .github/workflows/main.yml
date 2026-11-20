@@ -1,0 +1,32 @@
+
+name: Build Xadrez PS2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Instalar PS2BUILD
+        run: |
+          curl -sSfL https://ps2build.dev/install.sh | sh
+          echo "$HOME/.local/share/ps2build" >> "$GITHUB_PATH"
+
+      - name: Compilar jogo
+        run: |
+          export PATH="$HOME/.local/share/ps2build:$PATH"
+          ps2build build
+
+      - name: Disponibilizar ELF
+        uses: actions/upload-artifact@v4
+        with:
+          name: xadrez-ps2
+          path: build/bin/*.elf
+          if-no-files-found: error
