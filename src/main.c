@@ -555,6 +555,60 @@ void reiniciarPartida(void)
     limparMovimentos();
 }
 
+int casaSelecionavel(int x,int y)
+{
+    char p=tabuleiro[y][x];
+    return p!=' ' &&
+        ((vezBrancas && ehBranca(p)) ||
+         (!vezBrancas && ehPreta(p)));
+}
+
+void navegarCursor(int dx,int dy)
+{
+    int melhorX=cursorX;
+    int melhorY=cursorY;
+    int melhorPontos=99999;
+
+    for(int y=0;y<8;y++)
+    {
+        for(int x=0;x<8;x++)
+        {
+            int valido=selecionado ? movimentos[y][x] : casaSelecionavel(x,y);
+            if(!valido) continue;
+            if(x==cursorX && y==cursorY) continue;
+
+            int principal,secundario;
+
+            if(dx!=0)
+            {
+                if((x-cursorX)*dx<=0) continue;
+                principal=absoluto(x-cursorX);
+                secundario=absoluto(y-cursorY);
+            }
+            else
+            {
+                if((y-cursorY)*dy<=0) continue;
+                principal=absoluto(y-cursorY);
+                secundario=absoluto(x-cursorX);
+            }
+
+            int pontos=principal*100+secundario*10;
+            if(pontos<melhorPontos)
+            {
+                melhorPontos=pontos;
+                melhorX=x;
+                melhorY=y;
+            }
+        }
+    }
+
+    if(melhorPontos!=99999)
+    {
+        cursorX=melhorX;
+        cursorY=melhorY;
+    }
+}
+
 void processarControle(int botoes)
 {
     if(fimDeJogo)
@@ -564,10 +618,10 @@ void processarControle(int botoes)
         return;
     }
 
-    if(botoes&PAD_LEFT && cursorX>0) cursorX--;
-    if(botoes&PAD_RIGHT && cursorX<7) cursorX++;
-    if(botoes&PAD_UP && cursorY>0) cursorY--;
-    if(botoes&PAD_DOWN && cursorY<7) cursorY++;
+    if(botoes&PAD_LEFT) navegarCursor(-1,0);
+    if(botoes&PAD_RIGHT) navegarCursor(1,0);
+    if(botoes&PAD_UP) navegarCursor(0,-1);
+    if(botoes&PAD_DOWN) navegarCursor(0,1);
 
     if(botoes&PAD_CIRCLE)
     {
