@@ -20,12 +20,38 @@ int main(int argc, char *argv[])
     gsKit_init_screen(gsGlobal);
     gsKit_mode_switch(gsGlobal, GS_PERSISTENT);
 
+    int tamanho = 48;
+    int inicioX = (gsGlobal->Width - 8 * tamanho) / 2;
+    int inicioY = (gsGlobal->Height - 8 * tamanho) / 2;
+
     while (1)
     {
-        gsKit_clear(
-            gsGlobal,
-            GS_SETREG_RGBAQ(8, 20, 45, 0x80, 0)
-        );
+        gsKit_clear(gsGlobal, GS_SETREG_RGBAQ(8, 20, 45, 0x80, 0));
+
+        for (int linha = 0; linha < 8; linha++)
+        {
+            for (int coluna = 0; coluna < 8; coluna++)
+            {
+                int x1 = inicioX + coluna * tamanho;
+                int y1 = inicioY + linha * tamanho;
+                int x2 = x1 + tamanho;
+                int y2 = y1 + tamanho;
+
+                u64 cor;
+
+                if ((linha + coluna) % 2 == 0)
+                    cor = GS_SETREG_RGBAQ(190, 205, 220, 0x80, 0);
+                else
+                    cor = GS_SETREG_RGBAQ(55, 85, 115, 0x80, 0);
+
+                gsKit_prim_sprite(
+                    gsGlobal,
+                    x1, y1, x2, y2,
+                    1,
+                    cor
+                );
+            }
+        }
 
         gsKit_queue_exec(gsGlobal);
         gsKit_sync_flip(gsGlobal);
