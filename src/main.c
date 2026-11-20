@@ -4,6 +4,7 @@
 #include <tamtypes.h>
 
 static unsigned char padBuffer[256] __attribute__((aligned(64)));
+static unsigned char padBuffer2[256] __attribute__((aligned(64)));
 
 char tabuleiro[8][8] = {
     {'r','n','b','q','k','b','n','r'},
@@ -17,6 +18,8 @@ char tabuleiro[8][8] = {
 };
 
 int cursorX=0, cursorY=0;
+int cursorBrancasX=0, cursorBrancasY=0;
+int cursorPretasX=0, cursorPretasY=0;
 int selecionado=0;
 int origemX, origemY;
 int vezBrancas=1;
@@ -27,6 +30,7 @@ int capturas[8][8];
 int emXeque=0;
 int fimDeJogo=0;
 int vencedor=0;
+int menuInicial=1;
 
 int dentro(int x,int y)
 {
@@ -545,6 +549,10 @@ void reiniciarPartida(void)
 
     cursorX=0;
     cursorY=0;
+    cursorBrancasX=0;
+    cursorBrancasY=0;
+    cursorPretasX=0;
+    cursorPretasY=0;
     selecionado=0;
     vezBrancas=1;
 
@@ -611,6 +619,13 @@ void navegarCursor(int dx,int dy)
 
 void processarControle(int botoes)
 {
+    if(menuInicial)
+    {
+        if(botoes & PAD_CROSS)
+            menuInicial=0;
+        return;
+    }
+
     if(fimDeJogo)
     {
         if(botoes & PAD_CROSS)
@@ -692,9 +707,13 @@ int main(int argc,char *argv[])
 
     padInit(0);
     padPortOpen(0,0,padBuffer);
+    padPortOpen(1,0,padBuffer2);
 
     struct padButtonStatus pad;
+    struct padButtonStatus pad2;
     u16 botoesAnteriores=0;
+    u16 botoesAnteriores2=0;
+    int segundoControle=0;
 
     int tamanho=48;
     int inicioX=(gsGlobal->Width-8*tamanho)/2;
@@ -702,22 +721,112 @@ int main(int argc,char *argv[])
 
     while(1)
     {
-        if(padGetState(0,0)==PAD_STATE_STABLE)
-        {
-            if(padRead(0,0,&pad))
-            {
-                u16 atuais=(u16)(~pad.btns);
-                u16 pressionados=
-                    atuais & (u16)(~botoesAnteriores);
+        int controle1Pronto=0;
+        int controle2Pronto=0;
+        u16 pressionados1=0;
+        u16 pressionados2=0;
 
-                processarControle(pressionados);
-                botoesAnteriores=atuais;
+        if(padGetState(0,0)==PAD_STATE_STABLE &&
+           padRead(0,0,&pad))
+        {
+            u16 atuais=(u16)(~pad.btns);
+            pressionados1=atuais & (u16)(~botoesAnteriores);
+            botoesAnteriores=atuais;
+            controle1Pronto=1;
+        }
+
+        if(padGetState(1,0)==PAD_STATE_STABLE &&
+           padRead(1,0,&pad2))
+        {
+            u16 atuais2=(u16)(~pad2.btns);
+            pressionados2=atuais2 & (u16)(~botoesAnteriores2);
+            botoesAnteriores2=atuais2;
+            controle2Pronto=1;
+        }
+        else
+        {
+            botoesAnteriores2=0;
+        }
+
+        segundoControle=controle2Pronto;
+
+        if(menuInicial)
+        {
+            if(controle1Pronto)
+                processarControle(pressionados1);
+        }
+        else if(!fimDeJogo)
+        {
+            int turnoAntes=vezBrancas;
+
+            if(segundoControle)
+            {
+                if(vezBrancas && controle1Pronto)
+                {
+                    cursorX=cursorBrancasX;
+                    cursorY=cursorBrancasY;
+                    processarControle(pressionados1);
+                    cursorBrancasX=cursorX;
+                    cursorBrancasY=cursorY;
+                }
+                else if(!vezBrancas && controle2Pronto)
+                {
+                    cursorX=cursorPretasX;
+                    cursorY=cursorPretasY;
+                    processarControle(pressionados2);
+                    cursorPretasX=cursorX;
+                    cursorPretasY=cursorY;
+                }
             }
+            else if(controle1Pronto)
+            {
+                if(vezBrancas)
+                {
+                    cursorX=cursorBrancasX;
+                    cursorY=cursorBrancasY;
+                    processarControle(pressionados1);
+                    cursorBrancasX=cursorX;
+                    cursorBrancasY=cursorY;
+                }
+                else
+                {
+                    cursorX=cursorPretasX;
+                    cursorY=cursorPretasY;
+                    processarControle(pressionados1);
+                    cursorPretasX=cursorX;
+                    cursorPretasY=cursorY;
+                }
+            }
+        }
+        else if(controle1Pronto)
+        {
+            processarControle(pressionados1);
         }
 
         gsKit_clear(gsGlobal,
             GS_SETREG_RGBAQ(8,20,45,0x80,0));
 
+        if(menuInicial)
+        {
+            u64 painel=GS_SETREG_RGBAQ(5,12,28,0x80,0);
+            u64 branco=GS_SETREG_RGBAQ(245,248,255,0x80,0);
+            u64 azul=GS_SETREG_RGBAQ(70,175,255,0x80,0);
+            u64 borda=GS_SETREG_RGBAQ(65,145,220,0x80,0);
+
+            gsKit_prim_sprite(gsGlobal,70,120,570,320,5,painel);
+            gsKit_prim_sprite(gsGlobal,70,120,570,124,6,borda);
+            gsKit_prim_sprite(gsGlobal,70,316,570,320,6,borda);
+            gsKit_prim_sprite(gsGlobal,70,120,74,320,6,borda);
+            gsKit_prim_sprite(gsGlobal,566,120,570,320,6,borda);
+
+            desenharTextoCentralizado(gsGlobal,165,
+                "XADREZ",4,azul);
+
+            desenharTextoCentralizado(gsGlobal,235,
+                "X - INICIAR",2,branco);
+        }
+        else
+        {
         for(int linha=0;linha<8;linha++)
         {
             for(int coluna=0;coluna<8;coluna++)
@@ -798,10 +907,19 @@ int main(int argc,char *argv[])
         if(!fimDeJogo)
         {
             desenharBorda(gsGlobal,
-                inicioX+cursorX*tamanho,
-                inicioY+cursorY*tamanho,
+                inicioX+cursorBrancasX*tamanho,
+                inicioY+cursorBrancasY*tamanho,
                 tamanho,
                 GS_SETREG_RGBAQ(30,150,255,0x80,0));
+
+            if(segundoControle)
+            {
+                desenharBorda(gsGlobal,
+                    inicioX+cursorPretasX*tamanho,
+                    inicioY+cursorPretasY*tamanho,
+                    tamanho,
+                    GS_SETREG_RGBAQ(255,205,35,0x80,0));
+            }
         }
         else
         {
@@ -827,6 +945,8 @@ int main(int argc,char *argv[])
 
             desenharTextoCentralizado(gsGlobal,250,
                 "X - JOGAR NOVAMENTE",2,branco);
+        }
+
         }
 
         gsKit_queue_exec(gsGlobal);
