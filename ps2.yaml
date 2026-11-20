@@ -6,6 +6,3 @@ targets:
     type: ee
     sources:
       - src/main.c
-    libraries:
-      - gsKit
-      - dmaKit
