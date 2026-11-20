@@ -756,7 +756,7 @@ int main(int argc,char *argv[])
             u64 azul=GS_SETREG_RGBAQ(70,175,255,0x80,0);
 
             gsKit_prim_sprite(gsGlobal,
-                55,145,585,300,10,painel);
+                55,145,585,300,5,painel);
 
             desenharBorda(gsGlobal,55,145,530,
                 GS_SETREG_RGBAQ(65,145,220,0x80,0));
