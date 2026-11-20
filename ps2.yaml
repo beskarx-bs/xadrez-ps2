@@ -9,3 +9,4 @@ targets:
     libs:
       - gskit
       - dmakit
+      - pad
