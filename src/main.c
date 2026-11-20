@@ -32,7 +32,10 @@ int emXeque=0;
 int fimDeJogo=0;
 int vencedor=0;
 int menuInicial=1;
-int menuPausa=0;
+int menuTela=0; /* 0=modo, 1=cor do jogador, 2=tempo */
+int menuModo=0; /* 0=singleplayer, 1=multiplayer */
+int menuCor=0; /* 0=brancas, 1=pretas, 2=aleatorio */
+int corAleatoria=0;
 int menuOpcao=1; /* 0=sem tempo, 1=5 min, 2=10 min, 3=30 min */
 u64 tempoBrancasRestante=0;
 u64 tempoPretasRestante=0;
@@ -695,7 +698,7 @@ void iniciarRelogio(void)
 
 void atualizarRelogio(void)
 {
-    if(!relogioAtivo || menuInicial || menuPausa || fimDeJogo)
+    if(!relogioAtivo || menuInicial || fimDeJogo)
         return;
 
     u64 agora=GetTimerSystemTime();
@@ -723,33 +726,43 @@ void processarControle(int botoes)
 {
     if(menuInicial)
     {
-        if(botoes & PAD_UP)
-            menuOpcao=(menuOpcao+3)%4;
-        if(botoes & PAD_DOWN)
-            menuOpcao=(menuOpcao+1)%4;
-        if(botoes & PAD_CROSS)
+        if(menuTela==0)
         {
-            menuInicial=0;
-            menuPausa=0;
-            reiniciarPartida();
-            iniciarRelogio();
+            if(botoes & PAD_UP) menuModo=(menuModo+1)%2;
+            if(botoes & PAD_DOWN) menuModo=(menuModo+1)%2;
+            if(botoes & PAD_CROSS)
+                menuTela=(menuModo==0) ? 1 : 2;
         }
-        return;
-    }
-
-    if(menuPausa)
-    {
-        if(botoes & PAD_TRIANGLE)
+        else if(menuTela==1)
         {
-            menuPausa=0;
-            ultimoTick=GetTimerSystemTime();
+            if(botoes & PAD_UP) menuCor=(menuCor+2)%3;
+            if(botoes & PAD_DOWN) menuCor=(menuCor+1)%3;
+            if(botoes & PAD_CIRCLE) menuTela=0;
+            if(botoes & PAD_CROSS)
+            {
+                if(menuCor==2)
+                    corAleatoria=(int)(GetTimerSystemTime()&1);
+                else
+                    corAleatoria=menuCor;
+                menuTela=2;
+            }
         }
-        else if(botoes & PAD_CROSS)
+        else
         {
-            menuPausa=0;
-            menuInicial=1;
-            selecionado=0;
-            limparMovimentos();
+            if(botoes & PAD_UP) menuOpcao=(menuOpcao+3)%4;
+            if(botoes & PAD_DOWN) menuOpcao=(menuOpcao+1)%4;
+            if(botoes & PAD_CIRCLE)
+                menuTela=(menuModo==0) ? 1 : 0;
+            if(botoes & PAD_CROSS)
+            {
+                menuInicial=0;
+                reiniciarPartida();
+                /* No Singleplayer ainda nao existe bot: a cor escolhida
+                   define apenas quem joga primeiro nesta versao de teste. */
+                if(menuModo==0 && corAleatoria==1)
+                    vezBrancas=0;
+                iniciarRelogio();
+            }
         }
         return;
     }
@@ -761,13 +774,6 @@ void processarControle(int botoes)
             reiniciarPartida();
             iniciarRelogio();
         }
-        return;
-    }
-
-    if(botoes & PAD_START)
-    {
-        menuPausa=1;
-        ultimoTick=GetTimerSystemTime();
         return;
     }
 
@@ -953,31 +959,56 @@ int main(int argc,char *argv[])
             u64 azul=GS_SETREG_RGBAQ(70,175,255,0x80,0);
             u64 borda=GS_SETREG_RGBAQ(65,145,220,0x80,0);
 
-            gsKit_prim_sprite(gsGlobal,70,75,570,390,5,painel);
-            gsKit_prim_sprite(gsGlobal,70,75,570,79,6,borda);
-            gsKit_prim_sprite(gsGlobal,70,386,570,390,6,borda);
-            gsKit_prim_sprite(gsGlobal,70,75,74,390,6,borda);
-            gsKit_prim_sprite(gsGlobal,566,75,570,390,6,borda);
+            gsKit_prim_sprite(gsGlobal,70,55,570,420,5,painel);
+            gsKit_prim_sprite(gsGlobal,70,55,570,59,6,borda);
+            gsKit_prim_sprite(gsGlobal,70,416,570,420,6,borda);
+            gsKit_prim_sprite(gsGlobal,70,55,74,420,6,borda);
+            gsKit_prim_sprite(gsGlobal,566,55,570,420,6,borda);
 
-            desenharTextoCentralizado(gsGlobal,105,
-                "XADREZ",4,azul);
+            desenharTextoCentralizado(gsGlobal,85,"XADREZ",4,azul);
 
-            const char *opcoes[4]={
-                "SEM TEMPO",
-                "BLITZ 5 MIN",
-                "RAPIDA 10 MIN",
-                "CLASSICA 30 MIN"
-            };
-
-            for(int i=0;i<4;i++)
+            if(menuTela==0)
             {
-                u64 corOpcao=(i==menuOpcao) ? azul : branco;
-                desenharTextoCentralizado(gsGlobal,190+i*38,
-                    opcoes[i],2,corOpcao);
+                desenharTextoCentralizado(gsGlobal,155,"MODO DE JOGO",2,branco);
+                desenharTextoCentralizado(gsGlobal,220,
+                    menuModo==0 ? "> SINGLEPLAYER" : "  SINGLEPLAYER",2,
+                    menuModo==0 ? azul : branco);
+                desenharTextoCentralizado(gsGlobal,265,
+                    menuModo==1 ? "> MULTIPLAYER" : "  MULTIPLAYER",2,
+                    menuModo==1 ? azul : branco);
+                desenharTextoCentralizado(gsGlobal,355,"X - SELECIONAR",2,branco);
             }
-
-            desenharTextoCentralizado(gsGlobal,350,
-                "X - INICIAR",2,branco);
+            else if(menuTela==1)
+            {
+                desenharTextoCentralizado(gsGlobal,145,"SINGLEPLAYER",2,azul);
+                desenharTextoCentralizado(gsGlobal,190,"ESCOLHA SUA COR",2,branco);
+                const char *cores[3]={"BRANCAS","PRETAS","ALEATORIO"};
+                for(int i=0;i<3;i++)
+                    desenharTextoCentralizado(gsGlobal,235+i*38,cores[i],2,
+                        i==menuCor ? azul : branco);
+                desenharTextoCentralizado(gsGlobal,365,"X - CONTINUAR",2,branco);
+                desenharTextoEm(gsGlobal,90,390,"O - VOLTAR",1,branco);
+            }
+            else
+            {
+                desenharTextoCentralizado(gsGlobal,145,
+                    menuModo==0 ? "SINGLEPLAYER" : "MULTIPLAYER",2,azul);
+                if(menuModo==0)
+                {
+                    const char *cores[3]={"BRANCAS","PRETAS","ALEATORIO"};
+                    desenharTextoCentralizado(gsGlobal,180,
+                        corAleatoria==0 ? "COR: BRANCAS" : "COR: PRETAS",2,branco);
+                }
+                desenharTextoCentralizado(gsGlobal,215,"ESCOLHA O TEMPO",2,branco);
+                const char *opcoes[4]={
+                    "SEM TEMPO","BLITZ 5 MIN","RAPIDA 10 MIN","CLASSICA 30 MIN"
+                };
+                for(int i=0;i<4;i++)
+                    desenharTextoCentralizado(gsGlobal,250+i*32,opcoes[i],2,
+                        i==menuOpcao ? azul : branco);
+                desenharTextoCentralizado(gsGlobal,385,"X - INICIAR",2,branco);
+                desenharTextoEm(gsGlobal,90,402,"O - VOLTAR",1,branco);
+            }
         }
         else
         {
@@ -1005,21 +1036,6 @@ int main(int argc,char *argv[])
                     desenharPeca(gsGlobal,x,y,tipo,branca);
                 }
             }
-        }
-
-        /* Coordenadas: letras nas colunas e numeros nas linhas. */
-        u64 corCoordenada=GS_SETREG_RGBAQ(245,248,255,0x80,0);
-        for(int coluna=0;coluna<8;coluna++)
-        {
-            char letra[2]={(char)('A'+coluna),'\0'};
-            int tx=inicioX+coluna*tamanho+(tamanho-6)/2;
-            desenharTextoEm(gsGlobal,tx,inicioY+8*tamanho+3,letra,1,corCoordenada);
-        }
-        for(int linha=0;linha<8;linha++)
-        {
-            char numero[2]={(char)('8'-linha),'\0'};
-            int ty=inicioY+linha*tamanho+(tamanho-7)/2;
-            desenharTextoEm(gsGlobal,inicioX-12,ty,numero,1,corCoordenada);
         }
 
         if(relogioAtivo)
@@ -1088,7 +1104,7 @@ int main(int argc,char *argv[])
                 GS_SETREG_RGBAQ(40,255,100,0x80,0));
         }
 
-        if(!fimDeJogo && !menuPausa)
+        if(!fimDeJogo)
         {
             /* Mostra somente o cursor do jogador da vez.
                Isso vale tanto para dois controles quanto para um. */
@@ -1108,23 +1124,6 @@ int main(int argc,char *argv[])
                     tamanho,
                     GS_SETREG_RGBAQ(255,205,35,0x80,0));
             }
-        }
-        else if(menuPausa)
-        {
-            u64 painel=GS_SETREG_RGBAQ(5,12,28,0x80,0);
-            u64 branco=GS_SETREG_RGBAQ(245,248,255,0x80,0);
-            u64 azul=GS_SETREG_RGBAQ(70,175,255,0x80,0);
-
-            gsKit_prim_sprite(gsGlobal,
-                55,135,585,310,5,painel);
-            desenharBorda(gsGlobal,55,135,530,
-                GS_SETREG_RGBAQ(65,145,220,0x80,0));
-            desenharTextoCentralizado(gsGlobal,160,
-                "PAUSADO",3,azul);
-            desenharTextoCentralizado(gsGlobal,215,
-                "TRIANGULO - VOLTAR",2,branco);
-            desenharTextoCentralizado(gsGlobal,255,
-                "X - SAIR",2,branco);
         }
         else
         {
