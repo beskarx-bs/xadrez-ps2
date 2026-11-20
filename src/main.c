@@ -1,4 +1,3 @@
-
 #include <gsKit.h>
 #include <dmaKit.h>
 #include <libpad.h>
@@ -120,9 +119,9 @@ void gerarPseudo(int ox,int oy,
             adicionarPseudo(lista,caps,ox,y,branca);
 
             if(oy==inicio &&
+               dentro(ox,y+direcao) &&
                tabuleiro[y+direcao][ox]==' ')
-                adicionarPseudo(lista,caps,
-                                ox,y+direcao,branca);
+                adicionarPseudo(lista,caps,ox,y+direcao,branca);
         }
 
         for(i=-1;i<=1;i+=2)
@@ -184,8 +183,6 @@ void gerarPseudo(int ox,int oy,
         }
     }
 }
-
-/* Verifica se uma casa esta sendo atacada */
 
 int casaAtacada(int tx,int ty,int porBrancas)
 {
@@ -267,8 +264,6 @@ int casaAtacada(int tx,int ty,int porBrancas)
     return 0;
 }
 
-/* Procura o rei e verifica se esta em xeque */
-
 int reiEmXeque(int branca)
 {
     char rei=branca ? 'K' : 'k';
@@ -284,8 +279,6 @@ int reiEmXeque(int branca)
 
     return 1;
 }
-
-/* Testa uma jogada sem deixar o rei desprotegido */
 
 int movimentoSeguro(int ox,int oy,int dx,int dy,
                     int branca)
@@ -307,8 +300,6 @@ int movimentoSeguro(int ox,int oy,int dx,int dy,
 
     return seguro;
 }
-
-/* Gera apenas movimentos que protegem o proprio rei */
 
 void gerarMovimentos(void)
 {
@@ -335,8 +326,6 @@ void gerarMovimentos(void)
         }
     }
 }
-
-/* Verifica se o jogador ainda tem alguma jogada legal */
 
 int temJogadaLegal(int branca)
 {
@@ -370,8 +359,6 @@ int temJogadaLegal(int branca)
     return 0;
 }
 
-/* Atualiza xeque, xeque-mate ou empate */
-
 void verificarPartida(void)
 {
     emXeque=reiEmXeque(vezBrancas);
@@ -389,8 +376,6 @@ void verificarPartida(void)
         }
     }
 }
-
-/* Desenho das pecas */
 
 void bloco(GSGLOBAL *gs,int x,int y,int w,int h,
            u64 contorno,u64 cor)
@@ -418,32 +403,27 @@ void desenharPeca(GSGLOBAL *gs,int x,int y,
         case 'P':
             bloco(gs,x+17,y+15,14,14,contorno,cor);
             break;
-
         case 'R':
             bloco(gs,x+13,y+11,22,18,contorno,cor);
             bloco(gs,x+13,y+7,6,7,contorno,cor);
             bloco(gs,x+21,y+7,6,7,contorno,cor);
             bloco(gs,x+29,y+7,6,7,contorno,cor);
             break;
-
         case 'N':
             bloco(gs,x+15,y+14,18,15,contorno,cor);
             bloco(gs,x+19,y+8,15,12,contorno,cor);
             bloco(gs,x+27,y+7,7,7,contorno,cor);
             break;
-
         case 'B':
             bloco(gs,x+17,y+13,14,16,contorno,cor);
             bloco(gs,x+19,y+8,10,7,contorno,cor);
             break;
-
         case 'Q':
             bloco(gs,x+13,y+15,22,14,contorno,cor);
             bloco(gs,x+11,y+9,7,8,contorno,cor);
             bloco(gs,x+21,y+5,7,10,contorno,cor);
             bloco(gs,x+31,y+9,7,8,contorno,cor);
             break;
-
         case 'K':
             bloco(gs,x+14,y+14,20,15,contorno,cor);
             bloco(gs,x+21,y+5,6,19,contorno,cor);
@@ -483,11 +463,106 @@ void localizarRei(int branca,int *rx,int *ry)
             }
 }
 
-/* Controle */
+/* Letras simples desenhadas com pixels para a tela de resultado. */
+void desenharLetra(GSGLOBAL *gs,int x,int y,char letra,
+                   int escala,u64 cor)
+{
+    unsigned char linhas[7]={0,0,0,0,0,0,0};
+
+    switch(letra)
+    {
+        case 'A': { unsigned char a[7]={14,17,17,31,17,17,17}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'B': { unsigned char a[7]={30,17,17,30,17,17,30}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'C': { unsigned char a[7]={14,17,16,16,16,17,14}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'D': { unsigned char a[7]={30,17,17,17,17,17,30}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'E': { unsigned char a[7]={31,16,16,30,16,16,31}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'F': { unsigned char a[7]={31,16,16,30,16,16,16}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'G': { unsigned char a[7]={14,17,16,23,17,17,15}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'H': { unsigned char a[7]={17,17,17,31,17,17,17}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'I': { unsigned char a[7]={31,4,4,4,4,4,31}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'J': { unsigned char a[7]={7,2,2,2,18,18,12}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'K': { unsigned char a[7]={17,18,20,24,20,18,17}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'L': { unsigned char a[7]={16,16,16,16,16,16,31}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'M': { unsigned char a[7]={17,27,21,21,17,17,17}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'N': { unsigned char a[7]={17,25,21,19,17,17,17}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'O': { unsigned char a[7]={14,17,17,17,17,17,14}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'P': { unsigned char a[7]={30,17,17,30,16,16,16}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'Q': { unsigned char a[7]={14,17,17,17,21,18,13}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'R': { unsigned char a[7]={30,17,17,30,20,18,17}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'S': { unsigned char a[7]={15,16,16,14,1,1,30}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'T': { unsigned char a[7]={31,4,4,4,4,4,4}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'U': { unsigned char a[7]={17,17,17,17,17,17,14}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'V': { unsigned char a[7]={17,17,17,17,17,10,4}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'W': { unsigned char a[7]={17,17,17,21,21,21,10}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'X': { unsigned char a[7]={17,17,10,4,10,17,17}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'Y': { unsigned char a[7]={17,17,10,4,4,4,4}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case 'Z': { unsigned char a[7]={31,1,2,4,8,16,31}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case '-': { unsigned char a[7]={0,0,0,31,0,0,0}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case '!': { unsigned char a[7]={4,4,4,4,4,0,4}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        default: break;
+    }
+
+    for(int linha=0;linha<7;linha++)
+        for(int coluna=0;coluna<5;coluna++)
+            if(linhas[linha] & (1 << (4-coluna)))
+                gsKit_prim_sprite(gs,
+                    x+coluna*escala,y+linha*escala,
+                    x+(coluna+1)*escala,y+(linha+1)*escala,
+                    6,cor);
+}
+
+void desenharTextoCentralizado(GSGLOBAL *gs,int y,
+                               const char *texto,int escala,u64 cor)
+{
+    int quantidade=0;
+
+    while(texto[quantidade]!='\0')
+        quantidade++;
+
+    int largura=quantidade*6*escala;
+    int x=(gs->Width-largura)/2;
+
+    for(int i=0;i<quantidade;i++)
+        desenharLetra(gs,x+i*6*escala,y,texto[i],escala,cor);
+}
+
+void reiniciarPartida(void)
+{
+    char inicial[8][8] = {
+        {'r','n','b','q','k','b','n','r'},
+        {'p','p','p','p','p','p','p','p'},
+        {' ',' ',' ',' ',' ',' ',' ',' '},
+        {' ',' ',' ',' ',' ',' ',' ',' '},
+        {' ',' ',' ',' ',' ',' ',' ',' '},
+        {' ',' ',' ',' ',' ',' ',' ',' '},
+        {'P','P','P','P','P','P','P','P'},
+        {'R','N','B','Q','K','B','N','R'}
+    };
+
+    for(int y=0;y<8;y++)
+        for(int x=0;x<8;x++)
+            tabuleiro[y][x]=inicial[y][x];
+
+    cursorX=0;
+    cursorY=0;
+    selecionado=0;
+    vezBrancas=1;
+
+    emXeque=0;
+    fimDeJogo=0;
+    vencedor=0;
+
+    limparMovimentos();
+}
 
 void processarControle(int botoes)
 {
-    if(fimDeJogo) return;
+    if(fimDeJogo)
+    {
+        if(botoes & PAD_CROSS)
+            reiniciarPartida();
+        return;
+    }
 
     if(botoes&PAD_LEFT && cursorX>0) cursorX--;
     if(botoes&PAD_RIGHT && cursorX<7) cursorX++;
@@ -642,8 +717,6 @@ int main(int argc,char *argv[])
                 GS_SETREG_RGBAQ(255,190,40,0x80,0));
         }
 
-        /* Rei em xeque: contorno vermelho */
-
         if(emXeque)
         {
             int rx=0,ry=0;
@@ -655,8 +728,6 @@ int main(int argc,char *argv[])
                 tamanho,
                 GS_SETREG_RGBAQ(255,40,40,0x80,0));
         }
-
-        /* Xeque-mate: rei vencedor destacado em verde */
 
         if(fimDeJogo==1)
         {
@@ -670,11 +741,39 @@ int main(int argc,char *argv[])
                 GS_SETREG_RGBAQ(40,255,100,0x80,0));
         }
 
-        desenharBorda(gsGlobal,
-            inicioX+cursorX*tamanho,
-            inicioY+cursorY*tamanho,
-            tamanho,
-            GS_SETREG_RGBAQ(30,150,255,0x80,0));
+        if(!fimDeJogo)
+        {
+            desenharBorda(gsGlobal,
+                inicioX+cursorX*tamanho,
+                inicioY+cursorY*tamanho,
+                tamanho,
+                GS_SETREG_RGBAQ(30,150,255,0x80,0));
+        }
+        else
+        {
+            u64 painel=GS_SETREG_RGBAQ(5,12,28,0x80,0);
+            u64 branco=GS_SETREG_RGBAQ(245,248,255,0x80,0);
+            u64 azul=GS_SETREG_RGBAQ(70,175,255,0x80,0);
+
+            gsKit_prim_sprite(gsGlobal,
+                55,145,585,300,10,painel);
+
+            desenharBorda(gsGlobal,55,145,530,
+                GS_SETREG_RGBAQ(65,145,220,0x80,0));
+
+            desenharTextoCentralizado(gsGlobal,165,
+                fimDeJogo==1 ? "XEQUE-MATE!" : "EMPATE!",
+                3,azul);
+
+            if(fimDeJogo==1)
+                desenharTextoCentralizado(gsGlobal,205,
+                    vencedor ? "BRANCAS VENCERAM!" :
+                               "PRETAS VENCERAM!",
+                    2,branco);
+
+            desenharTextoCentralizado(gsGlobal,250,
+                "X - JOGAR NOVAMENTE",2,branco);
+        }
 
         gsKit_queue_exec(gsGlobal);
         gsKit_sync_flip(gsGlobal);
