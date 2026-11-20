@@ -17,49 +17,396 @@ char tabuleiro[8][8] = {
     {'R','N','B','Q','K','B','N','R'}
 };
 
-int cursorX = 0, cursorY = 0;
-int selecionado = 0;
+int cursorX=0, cursorY=0;
+int selecionado=0;
 int origemX, origemY;
-int vezBrancas = 1;
+int vezBrancas=1;
 
 int movimentos[8][8];
 int capturas[8][8];
 
-int dentro(int x, int y)
+int emXeque=0;
+int fimDeJogo=0;
+int vencedor=0;
+
+int dentro(int x,int y)
 {
-    return x >= 0 && x < 8 && y >= 0 && y < 8;
+    return x>=0 && x<8 && y>=0 && y<8;
+}
+
+int absoluto(int n)
+{
+    return n<0 ? -n : n;
 }
 
 int ehBranca(char p)
 {
-    return p >= 'A' && p <= 'Z';
+    return p>='A' && p<='Z';
 }
 
 int ehPreta(char p)
 {
-    return p >= 'a' && p <= 'z';
+    return p>='a' && p<='z';
 }
 
-int inimiga(char p, int branca)
+int inimiga(char p,int branca)
 {
     return branca ? ehPreta(p) : ehBranca(p);
 }
 
-void bloco(GSGLOBAL *gs, int x, int y, int w, int h,
-           u64 contorno, u64 cor)
+int ehRei(char p)
 {
-    gsKit_prim_sprite(gs, x, y, x+w, y+h, 2, contorno);
-    gsKit_prim_sprite(gs, x+2, y+2, x+w-2, y+h-2, 2, cor);
+    return p=='K' || p=='k';
 }
 
-void desenharPeca(GSGLOBAL *gs, int x, int y,
-                  char tipo, int branca)
+void limparMovimentos(void)
 {
-    u64 contorno = branca
+    int x,y;
+
+    for(y=0;y<8;y++)
+        for(x=0;x<8;x++)
+        {
+            movimentos[y][x]=0;
+            capturas[y][x]=0;
+        }
+}
+
+void adicionarPseudo(int lista[8][8],
+                     int caps[8][8],
+                     int x,int y,int branca)
+{
+    if(!dentro(x,y)) return;
+
+    char p=tabuleiro[y][x];
+
+    if(p==' ')
+        lista[y][x]=1;
+    else if(inimiga(p,branca) && !ehRei(p))
+    {
+        lista[y][x]=1;
+        caps[y][x]=1;
+    }
+}
+
+void gerarPseudo(int ox,int oy,
+                 int lista[8][8],
+                 int caps[8][8])
+{
+    int x,y,i;
+
+    for(y=0;y<8;y++)
+        for(x=0;x<8;x++)
+        {
+            lista[y][x]=0;
+            caps[y][x]=0;
+        }
+
+    char p=tabuleiro[oy][ox];
+    int branca=ehBranca(p);
+    char tipo=branca ? p : p-'a'+'A';
+
+    int dx[8]={1,-1,0,0,1,1,-1,-1};
+    int dy[8]={0,0,1,-1,1,-1,1,-1};
+
+    if(tipo=='P')
+    {
+        int direcao=branca ? -1 : 1;
+        int inicio=branca ? 6 : 1;
+
+        y=oy+direcao;
+
+        if(dentro(ox,y) && tabuleiro[y][ox]==' ')
+        {
+            adicionarPseudo(lista,caps,ox,y,branca);
+
+            if(oy==inicio &&
+               tabuleiro[y+direcao][ox]==' ')
+                adicionarPseudo(lista,caps,
+                                ox,y+direcao,branca);
+        }
+
+        for(i=-1;i<=1;i+=2)
+        {
+            x=ox+i;
+            y=oy+direcao;
+
+            if(dentro(x,y) &&
+               inimiga(tabuleiro[y][x],branca) &&
+               !ehRei(tabuleiro[y][x]))
+            {
+                adicionarPseudo(lista,caps,x,y,branca);
+            }
+        }
+    }
+    else if(tipo=='N')
+    {
+        int nx[8]={1,2,2,1,-1,-2,-2,-1};
+        int ny[8]={-2,-1,1,2,2,1,-1,-2};
+
+        for(i=0;i<8;i++)
+            adicionarPseudo(lista,caps,
+                            ox+nx[i],oy+ny[i],branca);
+    }
+    else if(tipo=='K')
+    {
+        for(y=-1;y<=1;y++)
+            for(x=-1;x<=1;x++)
+                if(x!=0 || y!=0)
+                    adicionarPseudo(lista,caps,
+                                    ox+x,oy+y,branca);
+    }
+    else
+    {
+        int inicio=tipo=='B' ? 4 : 0;
+        int quantidade=tipo=='R' ? 4 :
+                       tipo=='B' ? 4 : 8;
+
+        for(i=inicio;i<inicio+quantidade;i++)
+        {
+            x=ox+dx[i];
+            y=oy+dy[i];
+
+            while(dentro(x,y))
+            {
+                char destino=tabuleiro[y][x];
+
+                if(destino==' ')
+                    adicionarPseudo(lista,caps,x,y,branca);
+                else
+                {
+                    adicionarPseudo(lista,caps,x,y,branca);
+                    break;
+                }
+
+                x+=dx[i];
+                y+=dy[i];
+            }
+        }
+    }
+}
+
+/* Verifica se uma casa esta sendo atacada */
+
+int casaAtacada(int tx,int ty,int porBrancas)
+{
+    int x,y,dx,dy;
+
+    int nx[8]={1,2,2,1,-1,-2,-2,-1};
+    int ny[8]={-2,-1,1,2,2,1,-1,-2};
+
+    for(y=0;y<8;y++)
+    {
+        for(x=0;x<8;x++)
+        {
+            char p=tabuleiro[y][x];
+
+            if(p==' ') continue;
+
+            if(porBrancas && !ehBranca(p)) continue;
+            if(!porBrancas && !ehPreta(p)) continue;
+
+            char tipo=ehBranca(p) ? p : p-'a'+'A';
+
+            dx=tx-x;
+            dy=ty-y;
+
+            if(tipo=='P')
+            {
+                int direcao=porBrancas ? -1 : 1;
+
+                if(absoluto(dx)==1 && dy==direcao)
+                    return 1;
+            }
+            else if(tipo=='N')
+            {
+                for(int i=0;i<8;i++)
+                    if(dx==nx[i] && dy==ny[i])
+                        return 1;
+            }
+            else if(tipo=='K')
+            {
+                if(absoluto(dx)<=1 &&
+                   absoluto(dy)<=1 &&
+                   (dx!=0 || dy!=0))
+                    return 1;
+            }
+            else
+            {
+                int diagonal=(absoluto(dx)==absoluto(dy));
+                int reta=(dx==0 || dy==0);
+
+                if(tipo=='R' && !reta) continue;
+                if(tipo=='B' && !diagonal) continue;
+                if(tipo=='Q' && !reta && !diagonal) continue;
+
+                int passoX=(dx>0) ? 1 : (dx<0 ? -1 : 0);
+                int passoY=(dy>0) ? 1 : (dy<0 ? -1 : 0);
+
+                int cx=x+passoX;
+                int cy=y+passoY;
+                int bloqueado=0;
+
+                while(cx!=tx || cy!=ty)
+                {
+                    if(tabuleiro[cy][cx]!=' ')
+                    {
+                        bloqueado=1;
+                        break;
+                    }
+
+                    cx+=passoX;
+                    cy+=passoY;
+                }
+
+                if(!bloqueado)
+                    return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+/* Procura o rei e verifica se esta em xeque */
+
+int reiEmXeque(int branca)
+{
+    char rei=branca ? 'K' : 'k';
+
+    for(int y=0;y<8;y++)
+    {
+        for(int x=0;x<8;x++)
+        {
+            if(tabuleiro[y][x]==rei)
+                return casaAtacada(x,y,!branca);
+        }
+    }
+
+    return 1;
+}
+
+/* Testa uma jogada sem deixar o rei desprotegido */
+
+int movimentoSeguro(int ox,int oy,int dx,int dy,
+                    int branca)
+{
+    char copia[8][8];
+
+    for(int y=0;y<8;y++)
+        for(int x=0;x<8;x++)
+            copia[y][x]=tabuleiro[y][x];
+
+    tabuleiro[dy][dx]=tabuleiro[oy][ox];
+    tabuleiro[oy][ox]=' ';
+
+    int seguro=!reiEmXeque(branca);
+
+    for(int y=0;y<8;y++)
+        for(int x=0;x<8;x++)
+            tabuleiro[y][x]=copia[y][x];
+
+    return seguro;
+}
+
+/* Gera apenas movimentos que protegem o proprio rei */
+
+void gerarMovimentos(void)
+{
+    int lista[8][8];
+    int caps[8][8];
+
+    limparMovimentos();
+
+    char p=tabuleiro[origemY][origemX];
+    int branca=ehBranca(p);
+
+    gerarPseudo(origemX,origemY,lista,caps);
+
+    for(int y=0;y<8;y++)
+    {
+        for(int x=0;x<8;x++)
+        {
+            if(lista[y][x] &&
+               movimentoSeguro(origemX,origemY,x,y,branca))
+            {
+                movimentos[y][x]=1;
+                capturas[y][x]=caps[y][x];
+            }
+        }
+    }
+}
+
+/* Verifica se o jogador ainda tem alguma jogada legal */
+
+int temJogadaLegal(int branca)
+{
+    int lista[8][8];
+    int caps[8][8];
+
+    for(int oy=0;oy<8;oy++)
+    {
+        for(int ox=0;ox<8;ox++)
+        {
+            char p=tabuleiro[oy][ox];
+
+            if(p==' ') continue;
+            if(branca && !ehBranca(p)) continue;
+            if(!branca && !ehPreta(p)) continue;
+
+            gerarPseudo(ox,oy,lista,caps);
+
+            for(int y=0;y<8;y++)
+            {
+                for(int x=0;x<8;x++)
+                {
+                    if(lista[y][x] &&
+                       movimentoSeguro(ox,oy,x,y,branca))
+                        return 1;
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+/* Atualiza xeque, xeque-mate ou empate */
+
+void verificarPartida(void)
+{
+    emXeque=reiEmXeque(vezBrancas);
+
+    if(!temJogadaLegal(vezBrancas))
+    {
+        if(emXeque)
+        {
+            fimDeJogo=1;
+            vencedor=!vezBrancas;
+        }
+        else
+        {
+            fimDeJogo=2;
+        }
+    }
+}
+
+/* Desenho das pecas */
+
+void bloco(GSGLOBAL *gs,int x,int y,int w,int h,
+           u64 contorno,u64 cor)
+{
+    gsKit_prim_sprite(gs,x,y,x+w,y+h,2,contorno);
+    gsKit_prim_sprite(gs,x+2,y+2,x+w-2,y+h-2,2,cor);
+}
+
+void desenharPeca(GSGLOBAL *gs,int x,int y,
+                  char tipo,int branca)
+{
+    u64 contorno=branca
         ? GS_SETREG_RGBAQ(35,45,60,0x80,0)
         : GS_SETREG_RGBAQ(210,220,235,0x80,0);
 
-    u64 cor = branca
+    u64 cor=branca
         ? GS_SETREG_RGBAQ(240,240,225,0x80,0)
         : GS_SETREG_RGBAQ(20,30,45,0x80,0);
 
@@ -71,148 +418,37 @@ void desenharPeca(GSGLOBAL *gs, int x, int y,
         case 'P':
             bloco(gs,x+17,y+15,14,14,contorno,cor);
             break;
+
         case 'R':
             bloco(gs,x+13,y+11,22,18,contorno,cor);
             bloco(gs,x+13,y+7,6,7,contorno,cor);
             bloco(gs,x+21,y+7,6,7,contorno,cor);
             bloco(gs,x+29,y+7,6,7,contorno,cor);
             break;
+
         case 'N':
             bloco(gs,x+15,y+14,18,15,contorno,cor);
             bloco(gs,x+19,y+8,15,12,contorno,cor);
             bloco(gs,x+27,y+7,7,7,contorno,cor);
             break;
+
         case 'B':
             bloco(gs,x+17,y+13,14,16,contorno,cor);
             bloco(gs,x+19,y+8,10,7,contorno,cor);
             break;
+
         case 'Q':
             bloco(gs,x+13,y+15,22,14,contorno,cor);
             bloco(gs,x+11,y+9,7,8,contorno,cor);
             bloco(gs,x+21,y+5,7,10,contorno,cor);
             bloco(gs,x+31,y+9,7,8,contorno,cor);
             break;
+
         case 'K':
             bloco(gs,x+14,y+14,20,15,contorno,cor);
             bloco(gs,x+21,y+5,6,19,contorno,cor);
             bloco(gs,x+16,y+10,16,6,contorno,cor);
             break;
-    }
-}
-
-void limparMovimentos(void)
-{
-    int x,y;
-    for(y=0;y<8;y++)
-        for(x=0;x<8;x++)
-        {
-            movimentos[y][x]=0;
-            capturas[y][x]=0;
-        }
-}
-
-void adicionar(int x, int y, int branca)
-{
-    if(!dentro(x,y)) return;
-
-    char p=tabuleiro[y][x];
-
-    if(p==' ')
-        movimentos[y][x]=1;
-    else if(inimiga(p,branca))
-    {
-        movimentos[y][x]=1;
-        capturas[y][x]=1;
-    }
-}
-
-void gerarMovimentos(void)
-{
-    limparMovimentos();
-
-    char p=tabuleiro[origemY][origemX];
-    int branca=ehBranca(p);
-    char tipo=branca ? p : p-'a'+'A';
-
-    int x,y,i;
-    int dx[8]={1,-1,0,0,1,1,-1,-1};
-    int dy[8]={0,0,1,-1,1,-1,1,-1};
-
-    if(tipo=='P')
-    {
-        int direcao=branca ? -1 : 1;
-        int inicio=branca ? 6 : 1;
-
-        y=origemY+direcao;
-
-        if(dentro(origemX,y) && tabuleiro[y][origemX]==' ')
-        {
-            adicionar(origemX,y,branca);
-
-            if(origemY==inicio &&
-               tabuleiro[y+direcao][origemX]==' ')
-                adicionar(origemX,y+direcao,branca);
-        }
-
-        for(i=-1;i<=1;i+=2)
-        {
-            x=origemX+i;
-            y=origemY+direcao;
-
-            if(dentro(x,y) &&
-               inimiga(tabuleiro[y][x],branca))
-            {
-                adicionar(x,y,branca);
-            }
-        }
-    }
-
-    else if(tipo=='N')
-    {
-        int nx[8]={1,2,2,1,-1,-2,-2,-1};
-        int ny[8]={-2,-1,1,2,2,1,-1,-2};
-
-        for(i=0;i<8;i++)
-            adicionar(origemX+nx[i],origemY+ny[i],branca);
-    }
-
-    else if(tipo=='K')
-    {
-        for(y=-1;y<=1;y++)
-            for(x=-1;x<=1;x++)
-                if(x!=0 || y!=0)
-                    adicionar(origemX+x,origemY+y,branca);
-    }
-
-    else
-    {
-        int direcoes=tipo=='R' ? 4 :
-                     tipo=='B' ? 4 : 8;
-
-        int inicio=tipo=='B' ? 4 : 0;
-
-        for(i=inicio;i<inicio+direcoes;i++)
-        {
-            x=origemX+dx[i];
-            y=origemY+dy[i];
-
-            while(dentro(x,y))
-            {
-                char destino=tabuleiro[y][x];
-
-                if(destino==' ')
-                    adicionar(x,y,branca);
-                else
-                {
-                    if(inimiga(destino,branca))
-                        adicionar(x,y,branca);
-                    break;
-                }
-
-                x+=dx[i];
-                y+=dy[i];
-            }
-        }
     }
 }
 
@@ -233,8 +469,26 @@ void desenharBolinha(GSGLOBAL *gs,int cx,int cy,u64 cor)
     gsKit_prim_sprite(gs,cx-2,cy+2,cx+2,cy+5,3,cor);
 }
 
+void localizarRei(int branca,int *rx,int *ry)
+{
+    char rei=branca ? 'K' : 'k';
+
+    for(int y=0;y<8;y++)
+        for(int x=0;x<8;x++)
+            if(tabuleiro[y][x]==rei)
+            {
+                *rx=x;
+                *ry=y;
+                return;
+            }
+}
+
+/* Controle */
+
 void processarControle(int botoes)
 {
+    if(fimDeJogo) return;
+
     if(botoes&PAD_LEFT && cursorX>0) cursorX--;
     if(botoes&PAD_RIGHT && cursorX<7) cursorX++;
     if(botoes&PAD_UP && cursorY>0) cursorY--;
@@ -272,8 +526,10 @@ void processarControle(int botoes)
                 tabuleiro[origemY][origemX]=' ';
 
                 selecionado=0;
-                vezBrancas=!vezBrancas;
                 limparMovimentos();
+
+                vezBrancas=!vezBrancas;
+                verificarPartida();
             }
             else if(p!=' ' &&
               ((vezBrancas && ehBranca(p)) ||
@@ -322,7 +578,8 @@ int main(int argc,char *argv[])
             if(padRead(0,0,&pad))
             {
                 u16 atuais=(u16)(~pad.btns);
-                u16 pressionados=atuais & (u16)(~botoesAnteriores);
+                u16 pressionados=
+                    atuais & (u16)(~botoesAnteriores);
 
                 processarControle(pressionados);
                 botoesAnteriores=atuais;
@@ -383,6 +640,34 @@ int main(int argc,char *argv[])
                 inicioY+origemY*tamanho,
                 tamanho,
                 GS_SETREG_RGBAQ(255,190,40,0x80,0));
+        }
+
+        /* Rei em xeque: contorno vermelho */
+
+        if(emXeque)
+        {
+            int rx=0,ry=0;
+            localizarRei(vezBrancas,&rx,&ry);
+
+            desenharBorda(gsGlobal,
+                inicioX+rx*tamanho,
+                inicioY+ry*tamanho,
+                tamanho,
+                GS_SETREG_RGBAQ(255,40,40,0x80,0));
+        }
+
+        /* Xeque-mate: rei vencedor destacado em verde */
+
+        if(fimDeJogo==1)
+        {
+            int rx=0,ry=0;
+            localizarRei(vencedor,&rx,&ry);
+
+            desenharBorda(gsGlobal,
+                inicioX+rx*tamanho,
+                inicioY+ry*tamanho,
+                tamanho,
+                GS_SETREG_RGBAQ(40,255,100,0x80,0));
         }
 
         desenharBorda(gsGlobal,
