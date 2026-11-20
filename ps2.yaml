@@ -1,0 +1,8 @@
+
+project: xadrez-ps2
+
+targets:
+  - name: xadrez
+    type: ee
+    sources:
+      - src/main.c
