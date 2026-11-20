@@ -1,16 +1,14 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <tamtypes.h>
+#include <kernel.h>
+#include <debug.h>
 
 int main(void)
 {
-    printf("================================\n");
-    printf("         XADREZ PS2\n");
-    printf("================================\n\n");
+    init_scr();
+    scr_printf("XADREZ PS2\n");
+    scr_printf("Nosso jogo esta funcionando!");
 
-    printf("       1 - Dois jogadores\n");
-    printf("       2 - Contra a maquina\n\n");
-
-    printf("       Projeto Homebrew PS2\n");
+    SleepThread();
 
     return 0;
 }
