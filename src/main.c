@@ -2,6 +2,7 @@
 #include <dmaKit.h>
 #include <libpad.h>
 #include <tamtypes.h>
+#include <timer.h>
 
 static unsigned char padBuffer[256] __attribute__((aligned(64)));
 static unsigned char padBuffer2[256] __attribute__((aligned(64)));
@@ -31,6 +32,12 @@ int emXeque=0;
 int fimDeJogo=0;
 int vencedor=0;
 int menuInicial=1;
+int menuPausa=0;
+int menuOpcao=1; /* 0=sem tempo, 1=5 min, 2=10 min, 3=30 min */
+u64 tempoBrancasRestante=0;
+u64 tempoPretasRestante=0;
+u64 ultimoTick=0;
+int relogioAtivo=0;
 
 int dentro(int x,int y)
 {
@@ -501,6 +508,17 @@ void desenharLetra(GSGLOBAL *gs,int x,int y,char letra,
         case 'X': { unsigned char a[7]={17,17,10,4,10,17,17}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
         case 'Y': { unsigned char a[7]={17,17,10,4,4,4,4}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
         case 'Z': { unsigned char a[7]={31,1,2,4,8,16,31}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case '0': { unsigned char a[7]={14,17,19,21,25,17,14}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case '1': { unsigned char a[7]={4,12,4,4,4,4,14}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case '2': { unsigned char a[7]={14,17,1,2,4,8,31}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case '3': { unsigned char a[7]={30,1,1,14,1,1,30}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case '4': { unsigned char a[7]={2,6,10,18,31,2,2}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case '5': { unsigned char a[7]={31,16,16,30,1,1,30}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case '6': { unsigned char a[7]={14,16,16,30,17,17,14}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case '7': { unsigned char a[7]={31,1,2,4,8,8,8}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case '8': { unsigned char a[7]={14,17,17,14,17,17,14}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case '9': { unsigned char a[7]={14,17,17,15,1,1,14}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
+        case ':': { unsigned char a[7]={0,4,4,0,4,4,0}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
         case '-': { unsigned char a[7]={0,0,0,31,0,0,0}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
         case '!': { unsigned char a[7]={4,4,4,4,4,0,4}; for(int i=0;i<7;i++) linhas[i]=a[i]; break; }
         default: break;
@@ -528,6 +546,46 @@ void desenharTextoCentralizado(GSGLOBAL *gs,int y,
 
     for(int i=0;i<quantidade;i++)
         desenharLetra(gs,x+i*6*escala,y,texto[i],escala,cor);
+}
+
+void desenharTextoEm(GSGLOBAL *gs,int x,int y,
+                     const char *texto,int escala,u64 cor)
+{
+    for(int i=0;texto[i]!='\0';i++)
+        desenharLetra(gs,x+i*6*escala,y,texto[i],escala,cor);
+}
+
+void desenharRelogio(GSGLOBAL *gs,int x,int y,
+                     const char *nome,u64 restante,int ativo)
+{
+    char texto[20];
+    u64 segundos=restante/kBUSCLK;
+    int minutos=(int)(segundos/60);
+    int seg=(int)(segundos%60);
+
+    if(!ativo)
+    {
+        int i=0;
+        while(nome[i] && i<18) { texto[i]=nome[i]; i++; }
+        texto[i]='\0';
+    }
+    else
+    {
+        int i=0,j=0;
+        while(nome[i] && j<8) texto[j++]=nome[i++];
+        texto[j++]=' ';
+        if(minutos<10) texto[j++]='0';
+        if(minutos>99) minutos=99;
+        if(minutos>=10) texto[j++]=(char)('0'+(minutos/10));
+        texto[j++]=(char)('0'+(minutos%10));
+        texto[j++]=':';
+        texto[j++]=(char)('0'+(seg/10));
+        texto[j++]=(char)('0'+(seg%10));
+        texto[j]='\0';
+    }
+
+    u64 cor=GS_SETREG_RGBAQ(245,248,255,0x80,0);
+    desenharTextoEm(gs,x,y,texto,2,cor);
 }
 
 void reiniciarPartida(void)
@@ -617,19 +675,99 @@ void navegarCursor(int dx,int dy)
     }
 }
 
+u64 tempoInicialSelecionado(void)
+{
+    int minutos=0;
+    if(menuOpcao==1) minutos=5;
+    else if(menuOpcao==2) minutos=10;
+    else if(menuOpcao==3) minutos=30;
+    return Sec2TimerBusClock((u64)minutos*60);
+}
+
+void iniciarRelogio(void)
+{
+    u64 inicial=tempoInicialSelecionado();
+    tempoBrancasRestante=inicial;
+    tempoPretasRestante=inicial;
+    ultimoTick=GetTimerSystemTime();
+    relogioAtivo=(inicial>0);
+}
+
+void atualizarRelogio(void)
+{
+    if(!relogioAtivo || menuInicial || menuPausa || fimDeJogo)
+        return;
+
+    u64 agora=GetTimerSystemTime();
+    u64 decorrido=agora-ultimoTick;
+    ultimoTick=agora;
+
+    u64 *tempoAtual=vezBrancas
+        ? &tempoBrancasRestante : &tempoPretasRestante;
+
+    if(decorrido>=*tempoAtual)
+    {
+        *tempoAtual=0;
+        fimDeJogo=3; /* tempo esgotado */
+        vencedor=!vezBrancas;
+        selecionado=0;
+        limparMovimentos();
+    }
+    else
+    {
+        *tempoAtual-=decorrido;
+    }
+}
+
 void processarControle(int botoes)
 {
     if(menuInicial)
     {
+        if(botoes & PAD_UP)
+            menuOpcao=(menuOpcao+3)%4;
+        if(botoes & PAD_DOWN)
+            menuOpcao=(menuOpcao+1)%4;
         if(botoes & PAD_CROSS)
+        {
             menuInicial=0;
+            menuPausa=0;
+            reiniciarPartida();
+            iniciarRelogio();
+        }
+        return;
+    }
+
+    if(menuPausa)
+    {
+        if(botoes & PAD_TRIANGLE)
+        {
+            menuPausa=0;
+            ultimoTick=GetTimerSystemTime();
+        }
+        else if(botoes & PAD_CROSS)
+        {
+            menuPausa=0;
+            menuInicial=1;
+            selecionado=0;
+            limparMovimentos();
+        }
         return;
     }
 
     if(fimDeJogo)
     {
         if(botoes & PAD_CROSS)
+        {
             reiniciarPartida();
+            iniciarRelogio();
+        }
+        return;
+    }
+
+    if(botoes & PAD_START)
+    {
+        menuPausa=1;
+        ultimoTick=GetTimerSystemTime();
         return;
     }
 
@@ -673,6 +811,7 @@ void processarControle(int botoes)
                 limparMovimentos();
 
                 vezBrancas=!vezBrancas;
+                ultimoTick=GetTimerSystemTime();
                 verificarPartida();
             }
             else if(p!=' ' &&
@@ -749,6 +888,7 @@ int main(int argc,char *argv[])
         }
 
         segundoControle=controle2Pronto;
+        atualizarRelogio();
 
         if(menuInicial)
         {
@@ -813,16 +953,30 @@ int main(int argc,char *argv[])
             u64 azul=GS_SETREG_RGBAQ(70,175,255,0x80,0);
             u64 borda=GS_SETREG_RGBAQ(65,145,220,0x80,0);
 
-            gsKit_prim_sprite(gsGlobal,70,120,570,320,5,painel);
-            gsKit_prim_sprite(gsGlobal,70,120,570,124,6,borda);
-            gsKit_prim_sprite(gsGlobal,70,316,570,320,6,borda);
-            gsKit_prim_sprite(gsGlobal,70,120,74,320,6,borda);
-            gsKit_prim_sprite(gsGlobal,566,120,570,320,6,borda);
+            gsKit_prim_sprite(gsGlobal,70,75,570,390,5,painel);
+            gsKit_prim_sprite(gsGlobal,70,75,570,79,6,borda);
+            gsKit_prim_sprite(gsGlobal,70,386,570,390,6,borda);
+            gsKit_prim_sprite(gsGlobal,70,75,74,390,6,borda);
+            gsKit_prim_sprite(gsGlobal,566,75,570,390,6,borda);
 
-            desenharTextoCentralizado(gsGlobal,165,
+            desenharTextoCentralizado(gsGlobal,105,
                 "XADREZ",4,azul);
 
-            desenharTextoCentralizado(gsGlobal,235,
+            const char *opcoes[4]={
+                "SEM TEMPO",
+                "BLITZ 5 MIN",
+                "RAPIDA 10 MIN",
+                "CLASSICA 30 MIN"
+            };
+
+            for(int i=0;i<4;i++)
+            {
+                u64 corOpcao=(i==menuOpcao) ? azul : branco;
+                desenharTextoCentralizado(gsGlobal,190+i*38,
+                    opcoes[i],2,corOpcao);
+            }
+
+            desenharTextoCentralizado(gsGlobal,350,
                 "X - INICIAR",2,branco);
         }
         else
@@ -851,6 +1005,36 @@ int main(int argc,char *argv[])
                     desenharPeca(gsGlobal,x,y,tipo,branca);
                 }
             }
+        }
+
+        /* Coordenadas: letras nas colunas e numeros nas linhas. */
+        u64 corCoordenada=GS_SETREG_RGBAQ(245,248,255,0x80,0);
+        for(int coluna=0;coluna<8;coluna++)
+        {
+            char letra[2]={(char)('A'+coluna),'\0'};
+            int tx=inicioX+coluna*tamanho+(tamanho-6)/2;
+            desenharTextoEm(gsGlobal,tx,inicioY+8*tamanho+3,letra,1,corCoordenada);
+        }
+        for(int linha=0;linha<8;linha++)
+        {
+            char numero[2]={(char)('8'-linha),'\0'};
+            int ty=inicioY+linha*tamanho+(tamanho-7)/2;
+            desenharTextoEm(gsGlobal,inicioX-12,ty,numero,1,corCoordenada);
+        }
+
+        if(relogioAtivo)
+        {
+            desenharRelogio(gsGlobal,18,5,"BRANCAS",
+                tempoBrancasRestante,1);
+            desenharRelogio(gsGlobal,405,5,"PRETAS",
+                tempoPretasRestante,1);
+        }
+        else
+        {
+            desenharTextoEm(gsGlobal,18,5,"BRANCAS",2,
+                GS_SETREG_RGBAQ(245,248,255,0x80,0));
+            desenharTextoEm(gsGlobal,505,5,"PRETAS",2,
+                GS_SETREG_RGBAQ(245,248,255,0x80,0));
         }
 
         if(selecionado)
@@ -904,15 +1088,19 @@ int main(int argc,char *argv[])
                 GS_SETREG_RGBAQ(40,255,100,0x80,0));
         }
 
-        if(!fimDeJogo)
+        if(!fimDeJogo && !menuPausa)
         {
-            desenharBorda(gsGlobal,
-                inicioX+cursorBrancasX*tamanho,
-                inicioY+cursorBrancasY*tamanho,
-                tamanho,
-                GS_SETREG_RGBAQ(30,150,255,0x80,0));
-
-            if(segundoControle)
+            /* Mostra somente o cursor do jogador da vez.
+               Isso vale tanto para dois controles quanto para um. */
+            if(vezBrancas)
+            {
+                desenharBorda(gsGlobal,
+                    inicioX+cursorBrancasX*tamanho,
+                    inicioY+cursorBrancasY*tamanho,
+                    tamanho,
+                    GS_SETREG_RGBAQ(30,150,255,0x80,0));
+            }
+            else
             {
                 desenharBorda(gsGlobal,
                     inicioX+cursorPretasX*tamanho,
@@ -920,6 +1108,23 @@ int main(int argc,char *argv[])
                     tamanho,
                     GS_SETREG_RGBAQ(255,205,35,0x80,0));
             }
+        }
+        else if(menuPausa)
+        {
+            u64 painel=GS_SETREG_RGBAQ(5,12,28,0x80,0);
+            u64 branco=GS_SETREG_RGBAQ(245,248,255,0x80,0);
+            u64 azul=GS_SETREG_RGBAQ(70,175,255,0x80,0);
+
+            gsKit_prim_sprite(gsGlobal,
+                55,135,585,310,5,painel);
+            desenharBorda(gsGlobal,55,135,530,
+                GS_SETREG_RGBAQ(65,145,220,0x80,0));
+            desenharTextoCentralizado(gsGlobal,160,
+                "PAUSADO",3,azul);
+            desenharTextoCentralizado(gsGlobal,215,
+                "TRIANGULO - VOLTAR",2,branco);
+            desenharTextoCentralizado(gsGlobal,255,
+                "X - SAIR",2,branco);
         }
         else
         {
@@ -934,10 +1139,11 @@ int main(int argc,char *argv[])
                 GS_SETREG_RGBAQ(65,145,220,0x80,0));
 
             desenharTextoCentralizado(gsGlobal,165,
-                fimDeJogo==1 ? "XEQUE-MATE!" : "EMPATE!",
+                fimDeJogo==1 ? "XEQUE-MATE!" :
+                fimDeJogo==3 ? "TEMPO ESGOTADO!" : "EMPATE!",
                 3,azul);
 
-            if(fimDeJogo==1)
+            if(fimDeJogo==1 || fimDeJogo==3)
                 desenharTextoCentralizado(gsGlobal,205,
                     vencedor ? "BRANCAS VENCERAM!" :
                                "PRETAS VENCERAM!",
